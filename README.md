@@ -96,6 +96,12 @@ pip install -e ".[local]"     # local sentence-transformer embeddings
 pip install -e ".[llm,eval]"  # general model API and evaluation tools
 ```
 
+## API
+
+```dotenv
+API=xxx
+```
+
 Verify the package:
 
 ```bash
