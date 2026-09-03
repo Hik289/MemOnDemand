@@ -1,0 +1,29 @@
+# Public model-routing contract.
+#
+# MemOnDemand exposes one public alias, `general`. A deployment chooses the
+# concrete endpoint and model through environment variables; the repository
+# never silently substitutes another provider or model family.
+
+aliases:
+  general:
+    provider: general
+    base_url_env: "MEMONDEMAND_API_BASE_URL"
+    api_key_env: "MEMONDEMAND_API_KEY"
+    model_env: "MEMONDEMAND_API_MODEL"
+    token_parameter_env: "MEMONDEMAND_API_TOKEN_PARAMETER"
+    notes: "Used for hierarchy decisions, distillation, answering, and judging."
+
+embedding:
+  default_backend: local
+  local_model: "sentence-transformers/all-MiniLM-L6-v2"
+  general:
+    provider: general
+    base_url_env: "MEMONDEMAND_EMBED_API_BASE_URL"
+    api_key_env: "MEMONDEMAND_EMBED_API_KEY"
+    model_env: "MEMONDEMAND_EMBED_API_MODEL"
+    dimension_env: "MEMONDEMAND_EMBED_DIM"
+
+substitution_policy:
+  - "Every model-backed stage resolves to the `general` alias."
+  - "Missing endpoint, key, or model configuration fails before a request is sent."
+  - "Changing the concrete model requires an explicit environment or deployment-config update."

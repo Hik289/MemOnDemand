@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use MemOnDemand in your research or product prototype, please cite this software artifact."
+title: "MemOnDemand: Hierarchical Memory Retrieval with Event-Driven Evidence Promotion"
+authors:
+  - name: "MemOnDemand Authors"
+year: 2026
+license: MIT
+repository-code: "https://github.com/Hik289/MemOnDemand"
+keywords:
+  - enterprise retrieval
+  - memory systems
+  - hierarchical retrieval
+  - retrieval-augmented generation
