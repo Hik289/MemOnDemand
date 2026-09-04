@@ -1,18 +1,4 @@
-"""Hierarchy builder.
-
-For Step 3 we focus on the L0 level only: turn every memondemand L0 record into a
-DualNode by:
-
-  - detailed_text = the original full L0 body (canonical_label + raw_text)
-  - distilled_text = a short summary from the configured general model API
-  - source_evidence_ids = the L0 node's evidence_span_ids
-  - distilled_tokens / detailed_tokens computed via tiktoken cl100k_base
-
-Concurrency control:
-  - ThreadPoolExecutor with configurable workers (default 8)
-  - the shared API adapter handles retries and secret-safe diagnostics
-  - Token usage is recorded into the supplied TokenLedger
-"""
+"""Hierarchy builder."""
 from __future__ import annotations
 
 import logging
@@ -33,10 +19,6 @@ from memondemand.methods.token_ledger import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Prompts
-# ---------------------------------------------------------------------------
-
 DISTILL_SYSTEM_PROMPT = """You are an enterprise memory summarizer. Given a long-form L0 memory record from a corporate dataset, produce a SHORT distilled summary that:
 
 - captures the central topic, entities, time references, and any explicit decisions or values stated
@@ -54,10 +36,6 @@ DISTILL_USER_TEMPLATE = """L0 record body:
 
 Distilled summary:"""
 
-
-# ---------------------------------------------------------------------------
-# General model call
-# ---------------------------------------------------------------------------
 
 _ENC = None
 
@@ -117,11 +95,6 @@ def llm_distill_one(body: str, max_retries: int = 4) -> Dict[str, Any]:
         "error": f"{type(last_err).__name__}: {str(last_err)[:200]}",
         "attempts": max_retries,
     }
-
-
-# ---------------------------------------------------------------------------
-# Public entrypoint
-# ---------------------------------------------------------------------------
 
 
 def build_l0_dualnodes(

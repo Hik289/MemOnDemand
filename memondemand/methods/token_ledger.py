@@ -1,20 +1,4 @@
-"""Per-phase, per-model token accounting.
-
-Per the MemOnDemand token-accounting design, production runs report separately:
-  - hierarchy_build_input/output
-  - distilled_representation
-  - detailed_representation
-  - distilled_retrieval/navigation
-  - promotion_decision
-  - promoted_detailed_context
-  - final_answer
-  - per-query and per-correct-answer aggregates
-
-This ledger keeps a single in-memory structure for the lifetime of a run, and
-writes it out at end as JSON. It is thread-safe (one lock around mutations).
-
-It also estimates API cost using a simple per-model price table (configurable).
-"""
+"""Per-phase, per-model token accounting."""
 from __future__ import annotations
 
 import json
@@ -24,11 +8,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-
-# ---------------------------------------------------------------------------
-# Price table (USD per 1M tokens). Deployment operators can configure prices
-# through environment variables or pass TokenLedger(prices={...}).
-# ---------------------------------------------------------------------------
 
 DEFAULT_PRICES = {
     "general": {
@@ -41,10 +20,6 @@ DEFAULT_PRICES = {
     },
 }
 
-
-# ---------------------------------------------------------------------------
-# Categories — the MemOnDemand token-accounting design
-# ---------------------------------------------------------------------------
 
 PHASE_HIERARCHY_BUILD = "hierarchy_build"
 PHASE_DISTILLED_GEN = "distilled_text_gen"
