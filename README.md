@@ -25,8 +25,10 @@ budget. Compact records route each query; selected source-resolved details suppo
 answer; observed use updates which nodes remain easy to reuse.
 
 <p align="center">
-  <img src="assets/dynamic-hierarchy.png" alt="Dynamic multi-level memory construction and coarse-to-fine retrieval" width="96%">
+  <img src="assets/memondemand-overview.png" alt="MemOnDemand: bottom-up construction, top-down retrieval, selective evidence loading, and active-set promotion" width="100%">
 </p>
+
+[Vector PDF](assets/memondemand-overview.pdf) · [Editable SVG](assets/memondemand-overview.svg)
 
 ## What MemOnDemand Provides
 
@@ -91,9 +93,9 @@ pip install -e ".[all]"
 For smaller environments:
 
 ```bash
-pip install -e .              # core CLI and retrieval dependencies
-pip install -e ".[local]"     # local sentence-transformer embeddings
-pip install -e ".[llm,eval]"  # general model API and evaluation tools
+pip install -e .
+pip install -e ".[local]"
+pip install -e ".[llm,eval]"
 ```
 
 ## API
@@ -178,6 +180,8 @@ and [Production checklist](docs/production.md).
 
 ### 1. Dynamic Multi-Level Hierarchy
 
+Panels (a) and (b) show bottom-up construction and top-down retrieval.
+
 Enterprise collections differ across domains, tenants, and update patterns, so one fixed
 taxonomy cannot fit every repository. MemOnDemand anchors L0 records to stable source
 IDs and lets the collection determine both the abstraction structure and its depth.
@@ -186,9 +190,7 @@ L0 sources when an abstraction omits answer-critical detail.
 
 ### 2. Detailed and Distilled Memory
 
-<p align="center">
-  <img src="assets/dual-memory.png" alt="Detailed and distilled memory with budgeted evidence loading" width="90%">
-</p>
+Panels (b) and (c) separate distilled routing from detailed evidence loading.
 
 Detailed memory preserves source-specific content but is expensive to search and load;
 distilled memory is cheaper to route over but can omit answer-critical detail. Every
@@ -198,9 +200,7 @@ that fit answer budget `B` enter the evidence used for generation and citation.
 
 ### 3. On-Demand Promotion
 
-<p align="center">
-  <img src="assets/on-demand-promotion.png" alt="On-demand promotion with bounded managed state" width="98%">
-</p>
+Panel (d) shows active-set insertion, refresh, and removal for expiry or capacity.
 
 Eagerly preparing every representation wastes build time and storage on records that may
 never be used. MemOnDemand promotes a node only after query evidence shows its value,

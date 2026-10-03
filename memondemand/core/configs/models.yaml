@@ -1,9 +1,3 @@
-# Public model-routing contract.
-#
-# MemOnDemand exposes one public alias, `general`. A deployment chooses the
-# concrete endpoint and model through environment variables; the repository
-# never silently substitutes another provider or model family.
-
 aliases:
   general:
     provider: general

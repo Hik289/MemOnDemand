@@ -1,5 +1,3 @@
-"""General embeddings client with batching, retries, and L2 normalization."""
-
 from __future__ import annotations
 
 import logging
@@ -27,7 +25,6 @@ def embed_batch(
     timeout: float = 90.0,
     max_retries: int = 5,
 ) -> np.ndarray:
-    """Embed a list of texts through the configured general endpoint."""
     if not texts:
         dim = int(os.environ.get("MEMONDEMAND_EMBED_DIM", "0"))
         return np.zeros((0, dim), dtype=np.float32)
@@ -48,7 +45,6 @@ def embed_batch(
 
 
 class GeneralEmbedder:
-    """Sentence-transformers-compatible wrapper for the general endpoint."""
 
     def __init__(self, model_name: str | None = None, dim: int | None = None):
         self.model_name = model_name or os.environ.get(

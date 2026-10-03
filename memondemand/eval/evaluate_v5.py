@@ -1,4 +1,3 @@
-"""Evaluate answer quality and source-grounded retrieval metrics."""
 from __future__ import annotations
 import argparse
 import json
@@ -15,7 +14,7 @@ REPO_ROOT = os.getcwd()
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from memondemand.core.api_adapter import APIError, call as api_call  # noqa: E402
+from memondemand.core.api_adapter import APIError, call as api_call
 
 JUDGE_PRICE_PER_M = {"input": 0.00, "output": 0.00}
 JUDGE_ALIAS = "general"
@@ -50,7 +49,6 @@ def parse_score(text: str) -> Optional[int]:
             return max(0, min(5, v))
         except Exception:
             return None
-    # fallback: first integer in [0..5]
     m = re.search(r"\b([0-5])\b", text)
     if m:
         return int(m.group(1))
@@ -72,7 +70,7 @@ def llm_judge(question: str, reference: str, submitted: str) -> Dict[str, Any]:
              {"role": "user", "content": user}],
             max_tokens=400, temperature=0.0, timeout=60.0, max_retries=3, backoff_base=2.0,
         )
-    except (APIError, Exception) as exc:  # noqa: BLE001
+    except (APIError, Exception) as exc:
         return {"score": 0, "rationale": f"judge_error:{type(exc).__name__}"}
     text = resp.get("text", "") or ""
     in_t = int(resp.get("usage", {}).get("input_tokens", 0))
@@ -100,7 +98,6 @@ def main() -> int:
     per_q_path = out_dir / "per_query_eval.jsonl"
     eval_path = out_dir / "eval.json"
 
-    # Load gold
     gold: Dict[str, Dict[str, Any]] = {}
     with open(args.gold) as f:
         for line in f:
@@ -117,7 +114,6 @@ def main() -> int:
             }
     print(f"loaded {len(gold)} gold records")
 
-    # Load answers
     answers: List[Dict[str, Any]] = []
     with open(args.answers) as f:
         for line in f:
@@ -130,7 +126,6 @@ def main() -> int:
                 pass
     print(f"loaded {len(answers)} answer records")
 
-    # Resume support
     done_ids = set()
     if args.resume and per_q_path.exists():
         with open(per_q_path) as f:
@@ -140,7 +135,6 @@ def main() -> int:
                     continue
                 try:
                     d = json.loads(line)
-                    # Only skip rows with valid LLM scores; retry judge_errors
                     has_valid = (d.get("llm_judge_raw") or 0) > 0
                     is_non_answer = d.get("final_action", "") != "ANSWER"
                     if has_valid or is_non_answer:
@@ -176,7 +170,6 @@ def main() -> int:
                 llm_score_norm = judge_info.get("score", 0) / 5.0
                 judge_cost_total += judge_info.get("cost", 0.0)
             elif final_action != "ANSWER":
-                # STOP_INSUFFICIENT → all 0
                 precision = recall = f1 = llm_score_norm = 0.0
 
             rec = {
@@ -210,7 +203,6 @@ def main() -> int:
     finally:
         fout.close()
 
-    # Re-read all per-query for aggregate (including any already done)
     all_per = []
     with open(per_q_path) as f:
         for line in f:

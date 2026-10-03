@@ -1,4 +1,3 @@
-"""Hierarchy builder."""
 from __future__ import annotations
 
 import logging
@@ -8,9 +7,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 import tiktoken
 
-from memondemand.core.api_adapter import call as api_call  # noqa: E402
-from memondemand.methods.dual_node import DualNode, NODE_STATE_LIGHT  # noqa: E402
-from memondemand.methods.token_ledger import (  # noqa: E402
+from memondemand.core.api_adapter import call as api_call
+from memondemand.methods.dual_node import DualNode, NODE_STATE_LIGHT
+from memondemand.methods.token_ledger import (
     PHASE_DISTILLED_GEN,
     PHASE_HIERARCHY_BUILD,
     TokenLedger,
@@ -48,11 +47,6 @@ def _get_enc():
 
 
 def llm_distill_one(body: str, max_retries: int = 4) -> Dict[str, Any]:
-    """Create one distilled summary through the general model gateway.
-
-    Returns dict with:
-        text, input_tokens, output_tokens, wall_seconds, success, error
-    """
     enc = _get_enc()
     user_prompt = DISTILL_USER_TEMPLATE.format(body=body[:6000])
     input_tokens_est = len(enc.encode(DISTILL_SYSTEM_PROMPT)) + len(enc.encode(user_prompt))
@@ -106,15 +100,6 @@ def build_l0_dualnodes(
     progress_cb: Optional[Callable[[int, int], None]] = None,
     alias_status_tag: str = "",
 ) -> List[DualNode]:
-    """Build a DualNode per L0 record. L0 records are dicts like
-        {node_id, tenant_id, canonical_label, level_specific.raw_text,
-         level_specific.evidence_span_id (or source_evidence_span_ids)}
-
-    Returns a list of DualNodes (one per input record). Failed-to-distill
-    records still produce a DualNode but with `distilled_text == ""` and the
-    error captured in `extra["distill_error"]`. The Step 3 acceptance check
-    will catch these and fail the run.
-    """
     enc = _get_enc()
 
     def _node_body_and_meta(rec: Dict[str, Any]) -> Dict[str, Any]:
@@ -122,7 +107,6 @@ def build_l0_dualnodes(
         ls = rec.get("level_specific", {}) or {}
         raw = ls.get("raw_text", "") if isinstance(ls, dict) else ""
         body = label + ("\n" + raw if raw else "")
-        # Collect provenance: evidence_span_id from level_specific, else node_id self-ref
         ev_ids: List[str] = []
         if isinstance(ls, dict):
             esid = ls.get("evidence_span_id")

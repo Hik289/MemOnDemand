@@ -1,7 +1,6 @@
 import os as _os, sys as _sys
 REPO_ROOT = _os.environ.get("MEMONDEMAND_REPO_ROOT", _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..")))
 _sys.path.insert(0, REPO_ROOT)
-#!/usr/bin/env python3
 """Rebuild L0 distilled_text with a fact-preserving prompt (threaded).
 Usage: python redistill_l0.py --hierarchy <path> --out <path> [--workers 16]
 """
@@ -68,7 +67,6 @@ def main():
     out_path = pathlib.Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Load all nodes
     all_nodes = []
     with open(in_path) as f:
         for line in f:
@@ -76,7 +74,6 @@ def main():
             all_nodes.append(obj)
     log.info("Loaded %d nodes total", len(all_nodes))
 
-    # Resume: load already-done
     done = {}
     if args.resume and out_path.exists():
         with open(out_path) as f:
@@ -85,7 +82,6 @@ def main():
                 done[obj["node_id"]] = obj
         log.info("Resume: %d already done", len(done))
 
-    # Partition
     l0_todo = [(i, obj) for i, obj in enumerate(all_nodes)
                 if obj["level"] == "L0" and obj["node_id"] not in done]
     l0_skip = [(i, obj) for i, obj in enumerate(all_nodes)
@@ -93,14 +89,12 @@ def main():
     non_l0  = [(i, obj) for i, obj in enumerate(all_nodes) if obj["level"] != "L0"]
     log.info("L0 todo=%d  skip=%d  non-L0=%d", len(l0_todo), len(l0_skip), len(non_l0))
 
-    # Thread pool
     task_q = queue.Queue(maxsize=args.workers * 4)
     result_q = queue.Queue()
     threads = [threading.Thread(target=worker, args=(task_q, result_q, args.alias), daemon=True)
                for _ in range(args.workers)]
     for t in threads: t.start()
 
-    # Feed tasks
     def feed():
         for idx, obj in l0_todo:
             task_q.put((obj, idx))
@@ -109,7 +103,6 @@ def main():
     feed_t = threading.Thread(target=feed, daemon=True)
     feed_t.start()
 
-    # Collect results
     results = {}
     t0 = time.time()
     for _ in range(len(l0_todo)):
@@ -123,8 +116,6 @@ def main():
 
     for t in threads: t.join()
 
-    # Write output (preserve original order)
-    # Merge: non-L0 + skipped + new results
     all_out = {}
     for i, obj in non_l0:
         all_out[i] = obj

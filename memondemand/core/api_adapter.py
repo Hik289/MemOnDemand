@@ -1,13 +1,3 @@
-"""General model gateway for MemOnDemand.
-
-The public runtime exposes one model alias, ``general``. Chat and embedding
-requests use configurable general REST endpoints; no cloud vendor,
-deployment name, or model family is encoded in the package.
-
-Credentials are loaded from the process environment or an optional ``.env``
-file. Secret values are never included in structured results or log messages.
-"""
-
 from __future__ import annotations
 
 import json
@@ -29,7 +19,6 @@ DEFAULT_ENV_PATH = Path(os.environ.get("MEMONDEMAND_ENV_FILE", PROJECT_ROOT / ".
 
 
 def load_env(env_path: Path = DEFAULT_ENV_PATH) -> None:
-    """Load simple ``KEY=VALUE`` entries without replacing existing values."""
     if not env_path.is_file():
         return
     try:
@@ -57,7 +46,6 @@ logger.setLevel(logging.INFO)
 
 @dataclass(frozen=True)
 class AliasConfig:
-    """Resolved, non-secret configuration for the general model endpoint."""
 
     alias: str
     provider: str
@@ -67,7 +55,7 @@ class AliasConfig:
 
 
 class APIError(RuntimeError):
-    """Raised when a general model-gateway request cannot be completed."""
+    pass
 
 
 _SECRET_ENV_KEYS = (
@@ -77,7 +65,6 @@ _SECRET_ENV_KEYS = (
 
 
 def _sanitize(text: str) -> str:
-    """Remove configured and token-shaped secrets from diagnostic text."""
     rendered = text
     for name in _SECRET_ENV_KEYS:
         value = os.environ.get(name, "")
@@ -113,7 +100,6 @@ def _bool_env(name: str, default: bool) -> bool:
 
 
 def get_alias_config(alias: str = "general") -> AliasConfig:
-    """Resolve the sole public model alias."""
     if alias != "general":
         raise ValueError(
             f"Unknown model alias {alias!r}; MemOnDemand exposes only 'general'."
@@ -204,7 +190,6 @@ def _configured_prices() -> Dict[str, float]:
 
 
 def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Estimate cost from deployment-configured per-million-token prices."""
     del model
     prices = _configured_prices()
     return (
@@ -235,7 +220,6 @@ def call(
     max_retries: int = 5,
     backoff_base: float = 1.0,
 ) -> Dict[str, Any]:
-    """Send a chat-completions request through the general model gateway."""
     cfg = get_alias_config(alias)
     base_url = _require_env("MEMONDEMAND_API_BASE_URL")
     api_key = _require_env("MEMONDEMAND_API_KEY")
@@ -323,7 +307,6 @@ def embed(
     max_retries: int = 5,
     backoff_base: float = 1.0,
 ) -> Dict[str, Any]:
-    """Embed text through the configured general embeddings endpoint."""
     if max_retries <= 0:
         raise ValueError("max_retries must be positive")
     values = [str(text) for text in texts]
