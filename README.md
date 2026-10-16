@@ -28,7 +28,6 @@ answer; observed use updates which nodes remain easy to reuse.
   <img src="assets/memondemand-overview.png" alt="MemOnDemand: bottom-up construction, top-down retrieval, selective evidence loading, and active-set promotion" width="100%">
 </p>
 
-[Vector PDF](assets/memondemand-overview.pdf) · [Editable SVG](assets/memondemand-overview.svg)
 
 ## What MemOnDemand Provides
 
