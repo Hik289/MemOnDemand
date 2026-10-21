@@ -23,6 +23,10 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from memondemand.core.api_adapter import APIError, call as api_call
+from memondemand.runners.runtime_config import configure_runtime, resolve_prompt
+from memondemand.runners.prompts import load_prompt, NAV_USER_TMPL as SEMANTIC_NAV_USER_TMPL
+
+configure_runtime()
 from memondemand.methods.dual_node import (
     DualNode,
     NODE_STATE_LIGHT,
@@ -332,24 +336,7 @@ class CosineIndex:
         return [(self.ids[i], float(sims[i])) for i in order]
 
 
-ANSWER_SYSTEM = """You are an enterprise memory question-answering assistant.
-
-You will be given:
-  1. A user QUERY.
-  2. [CTX] hierarchy context blocks for background scope (do NOT cite these).
-  3. [EVID] evidence blocks, each with a node_id. Some have [BRIEF] (distilled summary) only;
-     top-ranked evidence also has [FULL] (complete source text).
-
-Rules:
-- Write a precise, factual answer (1-5 sentences) using ONLY information from [EVID] blocks.
-- Your answer MUST be grounded PRIMARILY in [FULL] source text. Treat [BRIEF] as a topic hint only.
-- Write 1-3 precise sentences. Every factual claim must be traceable to a specific [FULL] passage.
-- After the answer, on a NEW LINE, output: CITED: id1,id2,...
-- CITE EVERY [EVID] node whose [FULL] or [BRIEF] content you used. Do not omit citations.
-  If 3+ nodes contributed, cite all of them.
-- Do NOT cite [CTX] node_ids.
-- If no [EVID] context applies, output "INSUFFICIENT EVIDENCE" and CITED: (empty).
-- Never invent facts not present in the provided context."""
+ANSWER_SYSTEM = resolve_prompt("MEMONDEMAND_ANSWER_SYSTEM_OVERRIDE_FILE", "ANSWER_SYSTEM", load_prompt("answer_v2"))
 
 ANSWER_SYSTEM_V6 = """You are an enterprise knowledge retrieval system. Answer questions using ONLY the provided source documents.
 
@@ -513,13 +500,15 @@ def _node_text_for_answer(n, is_top_detail: bool = False) -> str:
         if is_top_detail and det:
             return f"[BRIEF] {brief}\n--- FULL SOURCE TEXT ---\n{det}\n--- END SOURCE ---"
         return f"[BRIEF] {brief}" if brief else (det or dis)[:2000]
-    return (det or dis)[:2000]
+    limit = int(os.environ.get("MEMONDEMAND_TRUNCATE_CHARS", "2000"))
+    return (det or dis)[:limit]
 
 def format_context_block(items: List[Tuple[str, str, str]]) -> str:
     if not items:
         return "(none)"
     import os as _os_fmt
-    if _os_fmt.environ.get("MEMONDEMAND_V6_DUAL_MEM", "0") == "1":
+    if (_os_fmt.environ.get("MEMONDEMAND_CONTEXT_FORMAT", "dual") == "dual"
+            or _os_fmt.environ.get("MEMONDEMAND_V6_DUAL_MEM", "0") == "1"):
         return _format_dual_context(items)
     return "\n".join(f"- [{nid}] ({lvl}) {txt}" for nid, lvl, txt in items)
 
@@ -527,6 +516,9 @@ def _format_dual_context(items: List[Tuple[str, str, str]]) -> str:
     ctx_lines, evid_lines = [], []
     for idx, (nid, lvl, txt) in enumerate(items):
         if lvl == "L0":
+            if (os.environ.get("MEMONDEMAND_ANSWER_MODE") == "detailed_full"
+                    and txt and "[FULL]" not in txt and "[BRIEF]" not in txt):
+                txt = "[FULL] " + txt
             evid_lines.append(f"- [EVID|{nid}] {txt}")
         else:
             ctx_lines.append(f"- [CTX|{nid}] ({lvl}) {txt}")
@@ -583,59 +575,9 @@ def _format_dual_smart_context(
     return "\n".join(parts) if parts else "(none)"
 
 
-NAV_SYSTEM = """You navigate a hierarchical enterprise memory to locate evidence for a query.
+NAV_SYSTEM = resolve_prompt("MEMONDEMAND_NAV_SYSTEM_OVERRIDE_FILE", "NAV_SYSTEM", load_prompt("navigation_v2"))
 
-Hierarchy: L2 = broad topic clusters  →  L1 = fine-grained clusters  →  L0 = source documents
-
-ACTIONS:
-- DESCEND: enter the most relevant node(s) to find more specific evidence
-- LATERAL: try sibling nodes if the current path is clearly off-topic
-- ANSWER: commit — evidence retrieval will run from the current cluster
-- STOP_INSUFFICIENT: only if the corpus has NO cluster related to the query
-
-NAVIGATION STRATEGY:
-
-Step 1 — IDENTIFY the FOCUS ENTITY from the query:
-  the exact product name / company / person / system / ticket / configuration key being asked about.
-
-Step 2 — MATCH against node summaries:
-  Read each node's summary (key bullet points). Does it explicitly name the FOCUS entity?
-  • Strong match (entity name present) → DESCEND into that node immediately.
-  • Weak match (related topic but entity not named) → note it as fallback.
-  • No match → skip.
-
-Step 3 — NAVIGATE toward specificity:
-  • Prefer narrow L1 clusters over broad L2 clusters when the entity name appears.
-  • If you see 2+ clusters with the entity, DESCEND into ALL of them (list multiple ids).
-  • Use LATERAL only if you've DESCENDed and the cluster turned out off-topic.
-  • Do NOT ANSWER from L2 unless no L1 cluster is relevant.
-
-SOURCE-TYPE HINTS (soft — override only if entity match is clear):
-  - Policy / process / config / docs query → prefer confluence / google_drive / github
-  - Message / ticket / incident / person query → prefer slack / linear / gmail
-
-STEP CAP:
-  You have a MAXIMUM of {max_steps} navigation actions (DESCEND or LATERAL combined).
-  After reaching the cap, you MUST output ANSWER (or STOP_INSUFFICIENT if nothing relevant was ever seen).
-
-OUTPUT: strict JSON only — no markdown, no extra text:
-{"action": "DESCEND|LATERAL|ANSWER|STOP_INSUFFICIENT",
- "chosen_node_ids": ["<id>", ...],
- "rationale": "<one concise sentence explaining your choice>"}
-
-ANSWER and STOP_INSUFFICIENT: chosen_node_ids may be empty."""
-
-NAV_USER_TMPL = """QUERY: {query}
-
-Navigation step {step}/{max_steps}  |  History: {prior_actions}
-
-FRONTIER — candidate nodes ({n} shown):
-{frontier_block}
-
-Instructions:
-1. Identify the FOCUS ENTITY from the query.
-2. Find the frontier node(s) whose summary explicitly mentions it.
-3. Output JSON: action + chosen_node_ids + rationale."""
+NAV_USER_TMPL = resolve_prompt("MEMONDEMAND_NAV_USER_OVERRIDE_FILE", "NAV_USER_TMPL", SEMANTIC_NAV_USER_TMPL)
 
 
 def call_llm(alias: str, system: str, user: str, *,
@@ -774,7 +716,14 @@ def get_index(ctx: RunnerCtx, level: str) -> CosineIndex:
         ctx.indexes[level] = CosineIndex([], np.zeros((0, ctx.embedder.dim), dtype=np.float32))
         return ctx.indexes[level]
     import os as _os_skip
-    if level == "L0" and _os_skip.environ.get("MEMONDEMAND_SKIP_L0_EMBED", "0") == "1":
+    skip_dense_l0 = (
+        ctx.method in {"V5", "B_llm_nav"}
+        and os.environ.get("MEMONDEMAND_L0_RETRIEVAL") in {"bm25", "bm25_promo"}
+        and not any(os.environ.get("MEMONDEMAND_" + option, "0") == "1"
+                    for option in ("DENSE_RERANK", "RRF"))
+    )
+    if (level == "L0" and skip_dense_l0
+            and _os_skip.environ.get("MEMONDEMAND_SKIP_L0_EMBED", "0") == "1"):
         log.warning("SKIP_L0_EMBED: returning empty L0 cosine index; BM25-only for L0 retrieval")
         ctx.indexes[level] = CosineIndex([], np.zeros((0, ctx.embedder.dim), dtype=np.float32))
         return ctx.indexes[level]
@@ -1026,7 +975,7 @@ def collect_descendant_l0(ctx: RunnerCtx, ids: Sequence[str]) -> List[str]:
 def final_l0_retrieval(ctx: RunnerCtx, q_vec, seed_ids: Sequence[str],
                        k: int, query_text: str = "") -> List[Tuple[str, float]]:
     import os as _os
-    if _os.environ.get("MEMONDEMAND_L0_RETRIEVAL", "") == "bm25":
+    if _os.environ.get("MEMONDEMAND_L0_RETRIEVAL", "") in {"bm25", "bm25_promo"}:
 
         if _os.environ.get("MEMONDEMAND_DENSE_RERANK", "0") == "1":
             try:
@@ -1187,7 +1136,9 @@ def run_llm_nav(ctx: RunnerCtx, qid: str, query: str, query_idx: int,
         )
 
         nav_text, in_t, out_t, wall = call_llm(
-            ctx.alias_navigator, NAV_SYSTEM, user,
+            ctx.alias_navigator, NAV_SYSTEM.replace(
+                "{max_steps}", os.environ.get("MEMONDEMAND_MAX_NAV_STEPS", "3")
+            ), user,
             max_tokens=200, temperature=0.0,
             ledger=ctx.ledger, phase=PHASE_RETRIEVAL, query_id=qid,
         )
@@ -1216,9 +1167,9 @@ def run_llm_nav(ctx: RunnerCtx, qid: str, query: str, query_idx: int,
             action = "ANSWER"
         import os as _os_max
         try:
-            MAX_NAV_STEPS = int(_os_max.environ.get("MEMONDEMAND_MAX_NAV_STEPS", "2"))
+            MAX_NAV_STEPS = int(_os_max.environ.get("MEMONDEMAND_MAX_NAV_STEPS", "3"))
         except Exception:
-            MAX_NAV_STEPS = 2
+            MAX_NAV_STEPS = 3
         if rec.n_navigation_steps >= MAX_NAV_STEPS and action in {"DESCEND", "LATERAL"}:
             if visible_frontier or visited_distilled or promoted_detailed:
                 action = "ANSWER"
@@ -1228,8 +1179,11 @@ def run_llm_nav(ctx: RunnerCtx, qid: str, query: str, query_idx: int,
             if visible_frontier or visited_distilled or promoted_detailed:
                 action = "ANSWER"
                 decision["chosen_node_ids"] = []
+        if action == "STOP_INSUFFICIENT" and os.environ.get("MEMONDEMAND_FORCE_ANSWER", "0") == "1":
+            action = "ANSWER"
         chosen = [c for c in (decision.get("chosen_node_ids") or [])
                   if c in ctx.hierarchy]
+        decision["action"] = action
         prior_actions.append(action)
         rec.nav_actions.append(action)
         rec.n_navigation_steps += 1
@@ -1456,10 +1410,14 @@ def run_llm_nav(ctx: RunnerCtx, qid: str, query: str, query_idx: int,
             )
         cand_ids = [nid for nid, _, _ in ctx_items]
         import os as _os_v6dm
-        _use_v6 = _os_v6dm.environ.get("MEMONDEMAND_V6_DUAL_MEM", "0") == "1"
-        _use_v7 = _os_v6dm.environ.get("MEMONDEMAND_V7_ENTITY", "0") == "1"
-        _use_v61 = _os_v6dm.environ.get("MEMONDEMAND_V61", "0") == "1"
-        _ans_mode_v8 = _os_v6dm.environ.get("MEMONDEMAND_ANSWER_MODE", "")
+        _legacy_prompt = (
+            os.environ.get("MEMONDEMAND_ANSWER_PROMPT", "v2") == "legacy"
+            and not os.environ.get("MEMONDEMAND_ANSWER_SYSTEM_OVERRIDE_FILE", "").strip()
+        )
+        _use_v6 = _legacy_prompt and _os_v6dm.environ.get("MEMONDEMAND_V6_DUAL_MEM", "0") == "1"
+        _use_v7 = _legacy_prompt and _os_v6dm.environ.get("MEMONDEMAND_V7_ENTITY", "0") == "1"
+        _use_v61 = _legacy_prompt and _os_v6dm.environ.get("MEMONDEMAND_V61", "0") == "1"
+        _ans_mode_v8 = _os_v6dm.environ.get("MEMONDEMAND_ANSWER_MODE", "") if _legacy_prompt else ""
         if _ans_mode_v8 == "top5_full_only":
             _ans_sys = ANSWER_SYSTEM_V8_TOP5
             _ans_tmpl = ANSWER_USER_V8_TOP5
@@ -1539,17 +1497,22 @@ def run_llm_nav(ctx: RunnerCtx, qid: str, query: str, query_idx: int,
 
 
 def main() -> int:
+    configure_runtime()
+    global NAV_SYSTEM, NAV_USER_TMPL, ANSWER_SYSTEM
+    NAV_SYSTEM = resolve_prompt("MEMONDEMAND_NAV_SYSTEM_OVERRIDE_FILE", "NAV_SYSTEM", NAV_SYSTEM)
+    NAV_USER_TMPL = resolve_prompt("MEMONDEMAND_NAV_USER_OVERRIDE_FILE", "NAV_USER_TMPL", NAV_USER_TMPL)
+    ANSWER_SYSTEM = resolve_prompt("MEMONDEMAND_ANSWER_SYSTEM_OVERRIDE_FILE", "ANSWER_SYSTEM", ANSWER_SYSTEM)
     ap = argparse.ArgumentParser()
     ap.add_argument("--method", required=True, choices=sorted(VALID_METHODS))
     ap.add_argument("--hierarchy", required=True)
     ap.add_argument("--queries", required=True)
     ap.add_argument("--query_order_seed", type=int, default=20260608)
-    ap.add_argument("--seed", type=int, default=20260608)
+    ap.add_argument("--seed", type=int, default=20260702)
     ap.add_argument("--alias_answer", default="general")
     ap.add_argument("--alias_navigator", default="general")
     ap.add_argument("--alias_low", default="general")
     ap.add_argument("--max_steps", type=int, default=12)
-    ap.add_argument("--top_k_distilled", type=int, default=8)
+    ap.add_argument("--top_k_distilled", type=int, default=50)
     ap.add_argument("--max_detailed_load", type=int, default=6)
     ap.add_argument("--promotion_budget", type=int, default=20)
     ap.add_argument("--decay_window", type=int, default=15)
@@ -1712,6 +1675,8 @@ def main() -> int:
                                partial=True)
     finally:
         f_out.close()
+        if state_log is not None:
+            state_log.close()
 
     _write_summary(answers_path, summary_path, args, tier, partial=False)
     try:

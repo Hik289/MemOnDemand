@@ -77,3 +77,4 @@ include = ["memondemand*"]
 
 [tool.setuptools.package-data]
 "memondemand.core" = ["configs/*.yaml"]
+"memondemand.runners.prompts" = ["*.txt"]
